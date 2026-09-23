@@ -2,6 +2,12 @@
   "name": "lead-intel",
   "version": "0.1.0",
   "private": true,
+  "trustedDependencies": [
+    "@prisma/client",
+    "@prisma/engines",
+    "prisma",
+    "unrs-resolver"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
@@ -13,17 +19,17 @@
     "@prisma/client": "^6.19.3",
     "@supabase/ssr": "^0.7.0",
     "@supabase/supabase-js": "^2.45.4",
-    "@tanstack/react-table": "^8.20.5",
+    "@tanstack/react-table": "^9.2.4",
     "clsx": "^2.1.1",
     "country-state-city": "^3.2.1",
     "dotenv": "^16.4.5",
     "exceljs": "^4.4.0",
-    "lucide-react": "^0.460.0",
+    "lucide-react": "^1.47.0",
     "next": "16.3.6",
     "papaparse": "^5.4.1",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "recharts": "^2.13.3",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "recharts": "^3.10.1",
     "tailwind-merge": "^2.5.4"
   },
   "devDependencies": {
@@ -34,7 +40,7 @@
     "@types/react-dom": "^19.0.0",
     "eslint": "^9.15.0",
     "eslint-config-next": "16.3.6",
-    "postcss": "^8.5.28",
+    "postcss": "^8.4.49",
     "prisma": "^6.19.3",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.6.3"
