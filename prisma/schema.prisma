@@ -1,0 +1,266 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ═════════════════════════════════════════════
+// USERS
+// ═════════════════════════════════════════════
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  role      Role     @default(OWNER)
+  createdAt DateTime @default(now())
+}
+
+enum Role {
+  OWNER
+  RESEARCHER
+  VIEWER
+}
+
+// ═════════════════════════════════════════════
+// CAMPAIGNS
+// ═════════════════════════════════════════════
+model Campaign {
+  id                    String   @id @default(cuid())
+  name                  String
+  status                CampaignStatus @default(DRAFT)
+  targetCountries       String[]
+  targetRegions         String[]
+  targetCities          String[]
+  targetIndustries      String[]
+  targetBusinessTypes   String[]
+  targetCompanySize     String?
+  requiredProduct       String?
+  keywords              String[]
+  targetJobTitles       String[]
+  leadRequirements      String?  @db.Text
+  qualificationCriteria Json?
+  targetLeadCount       Int      @default(0)
+  notes                 String?  @db.Text
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  leads                 Lead[]
+  costs                 CampaignCost[]
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+// ═════════════════════════════════════════════
+// LEADS
+// ═════════════════════════════════════════════
+model Lead {
+  id                     String   @id @default(cuid())
+  campaignId             String?
+  campaign               Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  companyName            String
+  industry               String?
+  businessType           String?
+  description            String?  @db.Text
+  website                String?
+  address                String?
+  country                String?
+  region                 String?
+  city                   String?
+  postalCode             String?
+  businessPhone          String?
+  businessEmail          String?
+  socialProfiles         Json?
+  companySize            String?
+
+  contactName            String?
+  contactJobTitle        String?
+  contactEmail           String?
+  contactPhone           String?
+
+  potentialRequirement   String?  @db.Text
+  productService         String?
+  estimatedValue         Decimal? @db.Decimal(12, 2)
+  estimatedValueCurrency String?  @default("USD")
+  buyingTimeframe        String?
+  notes                  String?  @db.Text
+
+  leadScore              LeadScore @default(UNRATED)
+  scoreBreakdown         Json?
+  qualificationStatus    QualificationStatus @default(UNQUALIFIED)
+  inventoryStatus        InventoryStatus @default(NEW)
+
+  businessVerified       Boolean  @default(false)
+  contactVerified        Boolean  @default(false)
+  emailVerified          Boolean  @default(false)
+  phoneVerified          Boolean  @default(false)
+  requirementVerified    Boolean  @default(false)
+  sourceVerified         Boolean  @default(false)
+  lastVerifiedAt         DateTime?
+
+  source                 String?
+  sourceUrl              String?
+  sourceCollectedAt      DateTime?
+
+  exclusivity            Exclusivity @default(UNSPECIFIED)
+  tags                   String[]
+  dedupKey               String?  @unique
+
+  acquisitionCost        Decimal? @db.Decimal(12, 2)
+  acquisitionCurrency    String?  @default("USD")
+
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  sales                  LeadSale[]
+
+  @@index([country, city])
+  @@index([industry])
+  @@index([leadScore])
+  @@index([inventoryStatus])
+  @@index([campaignId])
+}
+
+enum LeadScore {
+  A_PLUS
+  A
+  B
+  C
+  D
+  UNRATED
+}
+
+enum QualificationStatus {
+  UNQUALIFIED
+  POTENTIAL
+  QUALIFIED
+  REJECTED
+}
+
+enum InventoryStatus {
+  NEW
+  RESEARCHING
+  VERIFIED
+  QUALIFIED
+  AVAILABLE_FOR_SALE
+  RESERVED
+  SOLD
+  DELIVERED
+  REJECTED
+  DUPLICATE
+  EXPIRED
+}
+
+enum Exclusivity {
+  UNSPECIFIED
+  EXCLUSIVE
+  NON_EXCLUSIVE
+}
+
+// ═════════════════════════════════════════════
+// BUYERS
+// ═════════════════════════════════════════════
+model Buyer {
+  id                String   @id @default(cuid())
+  companyName       String
+  industry          String?
+  country           String?
+  city              String?
+  contactName       String?
+  contactEmail      String?
+  contactPhone      String?
+
+  productsServices  String[]
+  wantedLeadTypes   String[]
+  targetLocations   String[]
+  preferredQuality  LeadScore?
+  preferredVolume   String?
+  priceWillingToPay Decimal? @db.Decimal(12, 2)
+  priceCurrency     String?  @default("USD")
+
+  paymentHistory    String?  @db.Text
+  feedback          String?  @db.Text
+  status            BuyerStatus @default(PROSPECT)
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  sales             LeadSale[]
+}
+
+enum BuyerStatus {
+  ACTIVE
+  PAUSED
+  BLACKLISTED
+  PROSPECT
+}
+
+// ═════════════════════════════════════════════
+// LEAD SALES
+// ═════════════════════════════════════════════
+model LeadSale {
+  id              String   @id @default(cuid())
+  leadId          String
+  lead            Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  buyerId         String
+  buyer           Buyer    @relation(fields: [buyerId], references: [id], onDelete: Restrict)
+
+  dateOffered     DateTime?
+  dateSold        DateTime?
+  sellingPrice    Decimal  @db.Decimal(12, 2)
+  currency        String   @default("USD")
+  paymentStatus   PaymentStatus @default(PENDING)
+  deliveryStatus  DeliveryStatus @default(NOT_DELIVERED)
+  exclusivity     Exclusivity @default(UNSPECIFIED)
+
+  buyerFeedback   String?  @db.Text
+  refundStatus    RefundStatus @default(NONE)
+  notes           String?  @db.Text
+
+  createdAt       DateTime @default(now())
+}
+
+enum PaymentStatus {
+  PENDING
+  INVOICED
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum DeliveryStatus {
+  NOT_DELIVERED
+  DELIVERED
+  ACKNOWLEDGED
+}
+
+enum RefundStatus {
+  NONE
+  REQUESTED
+  APPROVED
+  REPLACED
+  REFUNDED
+}
+
+// ═════════════════════════════════════════════
+// CAMPAIGN COSTS
+// ═════════════════════════════════════════════
+model CampaignCost {
+  id          String   @id @default(cuid())
+  campaignId  String
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  description String
+  amount      Decimal  @db.Decimal(12, 2)
+  currency    String   @default("USD")
+  date        DateTime @default(now())
+}
