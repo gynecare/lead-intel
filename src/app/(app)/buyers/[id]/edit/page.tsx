@@ -311,4 +311,34 @@ export default function EditBuyerPage() {
   );
 }
 
-function Section({ title, children }: { title: string; children
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="border border-slate-800 rounded-xl p-5 bg-slate-950 space-y-4">
+      <h2 className="text-white font-medium text-sm uppercase tracking-wide">
+        {title}
+      </h2>
+      {children}
+    </div>
+  );
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="block text-sm text-slate-300 mb-1.5">{label}</label>
+      {children}
+    </div>
+  );
+}
