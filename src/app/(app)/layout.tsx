@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
+import { MobileHeader } from "@/components/mobile-sidebar";
 import { createClient } from "@/lib/supabase/server";
+
+export const dynamic = "force-dynamic";
 
 export default async function AppLayout({
   children,
@@ -19,7 +22,10 @@ export default async function AppLayout({
   return (
     <div className="flex min-h-screen bg-slate-900 text-slate-100">
       <Sidebar />
-      <main className="flex-1 min-w-0">{children}</main>
+      <div className="flex-1 min-w-0 flex flex-col">
+        <MobileHeader />
+        <main className="flex-1">{children}</main>
+      </div>
     </div>
   );
 }

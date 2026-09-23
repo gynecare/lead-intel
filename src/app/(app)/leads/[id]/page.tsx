@@ -30,9 +30,17 @@ export default async function LeadDetailPage({
 
   return (
     <div className="p-8 max-w-5xl">
-      <Link href="/leads" className="text-sm text-slate-400 hover:text-white">
-        ← Back to leads
-      </Link>
+      <div className="flex items-center justify-between mb-4">
+        <Link href="/leads" className="text-sm text-slate-400 hover:text-white">
+          ← Back to leads
+        </Link>
+        <Link
+          href={`/leads/${lead.id}/edit`}
+          className="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm"
+        >
+          Edit
+        </Link>
+      </div>
 
       <div className="mt-4 flex items-start justify-between">
         <div>

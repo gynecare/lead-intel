@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { buildDedupKey } from "@/lib/dedup";
 import { computeLeadScore } from "@/lib/scoring";
 import Papa from "papaparse";
+import type { DbField } from "@/lib/column-mapper";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -15,6 +16,7 @@ export async function POST(request: Request) {
   const form = await request.formData();
   const file = form.get("file") as File | null;
   const campaignId = (form.get("campaignId") as string) || null;
+  const mappingJson = form.get("mapping") as string | null;
 
   if (!file) {
     return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
@@ -24,7 +26,7 @@ export async function POST(request: Request) {
   const parsed = Papa.parse<Record<string, string>>(text, {
     header: true,
     skipEmptyLines: true,
-    transformHeader: (h) => h.trim().toLowerCase().replace(/\s+/g, "_"),
+    transformHeader: (h) => h.trim(),
   });
 
   if (parsed.errors.length > 0) {
@@ -37,6 +39,27 @@ export async function POST(request: Request) {
   const rows = parsed.data;
   if (rows.length === 0) {
     return NextResponse.json({ error: "CSV has no rows" }, { status: 400 });
+  }
+
+  // Build mapping: CSV header → DB field
+  // If no mapping passed, auto-map
+  let mapping: Record<string, DbField>;
+  if (mappingJson) {
+    mapping = JSON.parse(mappingJson);
+  } else {
+    const { autoMapHeaders } = await import("@/lib/column-mapper");
+    mapping = autoMapHeaders(Object.keys(rows[0]));
+  }
+
+  // Helper: get value from row by DB field
+  function getField(row: Record<string, string>, field: DbField): string | undefined {
+    for (const [csvHeader, dbField] of Object.entries(mapping)) {
+      if (dbField === field) {
+        const v = row[csvHeader];
+        return v ? v.trim() : undefined;
+      }
+    }
+    return undefined;
   }
 
   const campaign = campaignId
@@ -53,19 +76,21 @@ export async function POST(request: Request) {
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const companyName = (row.company_name || row.company || row.name || "").trim();
+    const companyName = getField(row, "companyName");
 
     if (!companyName) {
       results.errors++;
-      results.errorDetails.push(`Row ${i + 2}: missing company_name`);
+      results.errorDetails.push(`Row ${i + 2}: missing company name`);
       continue;
     }
 
-    const dedupKey = buildDedupKey({
-      companyName,
-      website: row.website,
-      businessPhone: row.business_phone || row.phone,
-    });
+    // Handle industry vs category fallback
+    const industry = getField(row, "industry") || getField(row, "category");
+
+    const website = getField(row, "website");
+    const businessPhone = getField(row, "businessPhone");
+
+    const dedupKey = buildDedupKey({ companyName, website, businessPhone });
 
     if (dedupKey) {
       const existing = await db.lead.findUnique({ where: { dedupKey } });
@@ -78,48 +103,57 @@ export async function POST(request: Request) {
       }
     }
 
+    // Build notes with rating/reviews if present
+    let notes = getField(row, "notes") || "";
+    const rating = getField(row, "rating");
+    const reviewCount = getField(row, "reviewCount");
+    if (rating) notes += `${notes ? "\n" : ""}Rating: ${rating}`;
+    if (reviewCount) notes += `${notes ? "\n" : ""}Reviews: ${reviewCount}`;
+
     const scoreResult = computeLeadScore({
       lead: {
-        industry: row.industry,
-        country: row.country,
-        region: row.region || row.state,
-        city: row.city,
-        companySize: row.company_size,
-        contactName: row.contact_name,
-        contactEmail: row.contact_email,
-        contactPhone: row.contact_phone,
-        potentialRequirement: row.potential_requirement || row.requirement,
-        website: row.website,
+        industry,
+        country: getField(row, "country"),
+        region: getField(row, "region"),
+        city: getField(row, "city"),
+        companySize: getField(row, "companySize"),
+        contactName: getField(row, "contactName"),
+        contactEmail: getField(row, "contactEmail"),
+        contactPhone: getField(row, "contactPhone"),
+        potentialRequirement: getField(row, "potentialRequirement"),
+        website,
       },
       campaign,
     });
+
+    const tagsRaw = getField(row, "tags");
 
     try {
       await db.lead.create({
         data: {
           campaignId: campaignId,
           companyName,
-          industry: row.industry || null,
-          businessType: row.business_type || null,
-          description: row.description || null,
-          website: row.website || null,
-          address: row.address || null,
-          country: row.country ? row.country.toUpperCase().slice(0, 2) : null,
-          region: row.region || row.state || null,
-          city: row.city || null,
-          postalCode: row.postal_code || row.zip || null,
-          businessPhone: row.business_phone || row.phone || null,
-          businessEmail: row.business_email || row.email || null,
-          companySize: row.company_size || null,
-          contactName: row.contact_name || null,
-          contactJobTitle: row.contact_job_title || row.contact_title || null,
-          contactEmail: row.contact_email || null,
-          contactPhone: row.contact_phone || null,
-          potentialRequirement: row.potential_requirement || row.requirement || null,
-          productService: row.product_service || null,
-          estimatedValue: row.estimated_value ? Number(row.estimated_value) : null,
-          buyingTimeframe: row.buying_timeframe || null,
-          notes: row.notes || null,
+          industry: industry || null,
+          businessType: getField(row, "businessType") || null,
+          description: null,
+          website: website || null,
+          address: getField(row, "address") || null,
+          country: normalizeCountry(getField(row, "country")),
+          region: getField(row, "region") || null,
+          city: getField(row, "city") || null,
+          postalCode: getField(row, "postalCode") || null,
+          businessPhone: businessPhone || null,
+          businessEmail: getField(row, "businessEmail") || null,
+          companySize: getField(row, "companySize") || null,
+          contactName: getField(row, "contactName") || null,
+          contactJobTitle: getField(row, "contactJobTitle") || null,
+          contactEmail: getField(row, "contactEmail") || null,
+          contactPhone: getField(row, "contactPhone") || null,
+          potentialRequirement: getField(row, "potentialRequirement") || null,
+          productService: getField(row, "productService") || null,
+          estimatedValue: parseNumber(getField(row, "estimatedValue")),
+          buyingTimeframe: getField(row, "buyingTimeframe") || null,
+          notes: notes || null,
           source: "csv_import",
           sourceCollectedAt: new Date(),
           dedupKey,
@@ -127,8 +161,8 @@ export async function POST(request: Request) {
           scoreBreakdown: scoreResult.breakdown,
           inventoryStatus: "NEW",
           qualificationStatus: "UNQUALIFIED",
-          tags: row.tags
-            ? row.tags.split(",").map((t) => t.trim()).filter(Boolean)
+          tags: tagsRaw
+            ? tagsRaw.split(",").map((t) => t.trim()).filter(Boolean)
             : [],
         },
       });
@@ -142,4 +176,34 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json(results);
+}
+
+function normalizeCountry(raw?: string): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim().toUpperCase();
+  // Already 2-letter code
+  if (/^[A-Z]{2}$/.test(trimmed)) return trimmed;
+  // Common country names → codes
+  const map: Record<string, string> = {
+    "UNITED STATES": "US",
+    USA: "US",
+    "UNITED KINGDOM": "GB",
+    UK: "GB",
+    CANADA: "CA",
+    AUSTRALIA: "AU",
+    PAKISTAN: "PK",
+    INDIA: "IN",
+    GERMANY: "DE",
+    FRANCE: "FR",
+    "UNITED ARAB EMIRATES": "AE",
+    UAE: "AE",
+  };
+  return map[trimmed] || null;
+}
+
+function parseNumber(raw?: string): number | null {
+  if (!raw) return null;
+  const cleaned = raw.replace(/[^0-9.]/g, "");
+  const n = Number(cleaned);
+  return isNaN(n) ? null : n;
 }

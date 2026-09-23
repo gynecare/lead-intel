@@ -17,6 +17,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { useToast } from "@/components/toast";
 
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -35,16 +36,18 @@ const nav = [
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const { toast } = useToast();
 
   async function logout() {
     const supabase = createClient();
     await supabase.auth.signOut();
+    toast("Signed out");
     router.push("/login");
     router.refresh();
   }
 
   return (
-    <aside className="w-60 shrink-0 h-screen sticky top-0 flex flex-col bg-slate-950 border-r border-slate-800 text-slate-300">
+    <aside className="hidden md:flex w-60 shrink-0 h-screen sticky top-0 flex-col bg-slate-950 border-r border-slate-800 text-slate-300">
       <div className="px-5 py-5 border-b border-slate-800">
         <div className="text-lg font-semibold text-white">Lead Intel</div>
         <div className="text-xs text-slate-500">Internal workspace</div>
